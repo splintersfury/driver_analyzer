@@ -9,6 +9,56 @@ from mwdblib import MWDB
 import os
 import logging
 import json
+import redis
+import requests
+
+# Telegram notification config
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+REDIS_HOST = os.environ.get("KARTON_REDIS_HOST", "karton-redis")
+WATCH_KEY = "telegram:watch"
+
+
+def send_telegram_notification(sha256: str, verdict: str, vuln_count: int = 0, filename: str = ""):
+    """Send Telegram notification to all users watching this driver."""
+    if not TELEGRAM_BOT_TOKEN:
+        return
+
+    try:
+        r = redis.Redis(host=REDIS_HOST, port=6379, decode_responses=True)
+        chat_ids = r.smembers(f"{WATCH_KEY}:{sha256}")
+
+        if not chat_ids:
+            logging.debug(f"No watchers for {sha256}")
+            return
+
+        # Build message
+        emoji = "⚠️" if verdict == "VULNERABLE" else "✅"
+        msg = f"{emoji} *Analysis Complete*\n\n"
+        msg += f"📁 `{filename or sha256[:16]}...`\n"
+        msg += f"🔍 Verdict: *{verdict}*\n"
+
+        if vuln_count > 0:
+            msg += f"🐛 Vulnerabilities: {vuln_count}\n"
+
+        msg += f"\n[View in MWDB](http://localhost:8082/file/{sha256})"
+
+        # Send to all watchers
+        for chat_id in chat_ids:
+            try:
+                requests.post(
+                    f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
+                    json={
+                        "chat_id": chat_id,
+                        "text": msg,
+                        "parse_mode": "Markdown"
+                    },
+                    timeout=10
+                )
+                logging.info(f"Sent Telegram notification to chat {chat_id} for {sha256[:12]}")
+            except Exception as e:
+                logging.error(f"Failed to send Telegram notification: {e}")
+    except Exception as e:
+        logging.error(f"Error checking watchers: {e}")
 
 class ReporterKarton(Karton):
     """
@@ -187,6 +237,14 @@ class ReporterKarton(Karton):
 
             obj.add_comment(markdown)
             logging.info(f"Reported IOCTLance attributes for {sha256}")
+            
+            # Send Telegram notification to watchers
+            try:
+                sample = task.get_resource("sample")
+                filename = sample.name if sample else ""
+                send_telegram_notification(sha256, verdict, count, filename)
+            except Exception as e:
+                logging.debug(f"Telegram notification skipped: {e}")
          except Exception as e:
             logging.error(f"Failed to report analysis to MWDB: {e}")
 

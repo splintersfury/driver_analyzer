@@ -159,6 +159,8 @@ services:
   karton-driver-ioctlance:
     build: ./services/ioctlance
     environment: *custom_karton_env
+    deploy:
+      replicas: 10
     depends_on:
       - karton-system
       - minio
@@ -166,12 +168,33 @@ services:
 
   karton-driver-reporter:
     build: ./services/reporter
-    environment: *custom_karton_env
+    environment:
+      <<: *custom_karton_env
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
     depends_on:
       - karton-system
       - minio
       - mwdb-core
       - karton-redis
+
+  karton-telegram-bot:
+    build: ./services/telegram
+    environment:
+      <<: *custom_karton_env
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+    depends_on:
+      - karton-redis
+      - mwdb-core
+
+  karton-driver-ghidra:
+    build: ./services/ghidra
+    environment: *custom_karton_env
+    depends_on:
+      - karton-system
+      - minio
+      - karton-redis
+      - mwdb-core
 
 volumes:
   mwdb-postgres-data:

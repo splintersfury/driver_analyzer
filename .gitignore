@@ -3,3 +3,12 @@ ghidra.zip
 ghidra_11.0.1_PUBLIC/
 decompiled_code/
 *.sys
+*.log
+__pycache__/
+.venv/
+.vscode/
+mwdb-uploads/
+vt_downloads/
+mwdb-uploads-data/
+mwdb-postgres-data/
+minio-data/

@@ -384,6 +384,9 @@ def analyze_driver(driver_path):
     # Return 'wdm' if it is a WDM driver.
     driver_type = utils.find_driver_type()
     if driver_type != 'wdm':
+        utils.print_info(f'Skipping non-WDM driver: {driver_path}')
+        globals.driver_info['basic'] = {'path': driver_path, 'status': 'skipped', 'reason': 'non-wdm'}
+        open(driver_path + '.json', 'w').write(json.dumps(globals.driver_info, indent=4))
         return
 
     # Get control flow graph.

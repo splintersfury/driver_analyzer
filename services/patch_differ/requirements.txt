@@ -1,0 +1,5 @@
+karton-core
+mwdblib
+pefile
+requests
+PyYAML>=6.0

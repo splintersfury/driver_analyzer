@@ -50,7 +50,7 @@ class GhidraDecompilerKarton(Karton):
             cmd = [
                 headless_script,
                 project_dir,
-                "temp_project",
+                f"temp_project_{run_id}",
                 "-import", sample_path,
                 "-scriptPath", "/app",
                 "-postScript", "ExportDecompiled.py", output_dir,

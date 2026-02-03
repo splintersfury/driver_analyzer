@@ -4,14 +4,16 @@ A scalable pipeline for analyzing Windows drivers for potential vulnerabilities,
 
 ## Overview
 
-This project provides a set of Karton services designed to automatically process and analyze Windows drivers. The pipeline extracts metadata, checks digital signatures, and performs static analysis to identify potentially vulnerable IOCTL handlers.
+This project automatically processes and analyzes Windows drivers. It extracts metadata, checks digital signatures, detects patch differences, and performs symbolic execution to identify potential vulnerabilities.
 
 ### Key Components
 
-*   **Signature Service**: Verifies digital signatures using Sysinternals Sigcheck.
+*   **Signature Service**: Verifies digital signatures using Sysinternals Sigcheck (via Wine).
 *   **Classifier**: Identifies file type and architecture.
+*   **Patch Differ**: Automatically finds prior versions of a driver, generates a binary diff (using Ghidra), and reports changed functions and security fix patterns.
+*   **Ghidra Service**: Headless decompilation and export of function data.
 *   **IOCTLance Service**: Uses symbolic execution (via angr) to find vulnerabilities in IOCTL handlers.
-*   **Reporter**: Aggregates results and uploads them to MWDB.
+*   **Reporter**: Aggregates results and uploads markdown reports to MWDB.
 
 ## Prerequisites
 
@@ -26,57 +28,60 @@ This project provides a set of Karton services designed to automatically process
     cd driver_analyzer
     ```
 
-2.  **Environment Setup (Optional):**
-    You can create a `.env` file to customize passwords and keys, or rely on the defaults in `docker-compose.yml` for a quick test environment.
-    
+2.  **Environment Setup (Required):**
+    Copy the example configuration and set your secrets.
     ```bash
-    # Example .env (optional)
-    MWDB_SECRET_KEY=your-secure-random-key
-    MWDB_API_KEY=your-generated-mwdb-api-key
+    cp .env.example .env
     ```
-    
-    *Note: The default setup uses `dev-secret-key-change-me` and a placeholder for the API key. You will need to generate a real API key from MWDB to fully enable the Reporter service.*
+    *   **Edit `.env`**: You must set `MWDB_API_KEY` (after first login) and `TELEGRAM_BOT_TOKEN` (optional).
 
 3.  **Start the services:**
     ```bash
-    docker-compose up --build -d
+    docker-compose up -d --build
     ```
 
 4.  **Access the dashboards:**
-    *   **MWDB Core**: http://localhost:8082 (Login: `admin` / `mwdb-password`)
+    *   **MWDB Core**: http://localhost:8080 (Login: `admin` / `admin` - *default*)
     *   **Karton Dashboard**: http://localhost:8081
 
-## Configuration
+5.  **Final Configuration**:
+    *   Log in to MWDB.
+    *   Generate an API Key (Settings -> API Key).
+    *   Update `MWDB_API_KEY` in your `.env` file.
+    *   Restart the stack: `docker-compose up -d`.
 
-### Generating an MWDB API Key
+## Features
 
-The `mwdb-reporter` service needs an API key to upload results to MWDB.
-1.  Log in to MWDB (http://localhost:8082).
-2.  Go to Settings -> API Key.
-3.  Copy the API Key.
-4.  Update your `.env` file or export the variable:
-    ```bash
-    export MWDB_API_KEY=your_copied_api_key
-    ```
-5.  Restart the reporter service:
-    ```bash
-    docker-compose up -d karton-driver-reporter
-    ```
+### 🛡️ Patch Differ (New)
+Automatically compares an uploaded driver against older versions found in the database.
+- **Strict Arch Matching**: Ensures x64 is only diffed against x64.
+- **Match Rate Tagging**: Automatically tags analysis quality:
+    - `diff_match:high` (>85% match)
+    - `diff_match:medium` (70-85%)
+    - `diff_match:low` (<70%)
+- **Reports**: Generates a markdown report `Patch_Diff_*.md` attached to the sample, highlighting changed functions and potential security fixes.
 
-### Uploading Samples
+### 💾 Hardened Storage
+Files uploaded to MWDB are safely stored in a **Docker Named Volume** (`mwdb-uploads-data`). This ensures data persistence matches the database lifecycle and prevents data loss during container restarts.
 
-You can upload samples directly through the MWDB web interface, or use the `upload_drivers.py` script provided (requires identifying the API key).
+## Utilities
+
+### Re-analyzing Samples
+If you need to re-trigger analysis for files (e.g., after updating the pipeline), use the included script:
+```bash
+python3 reanalyze_mwdb.py --days 1  # Reanalyze samples from the last 24h
+```
 
 ## Services Detail
 
 ### Signature Service (`services/signature`)
-Wraps `sigcheck.exe` (running via Wine) to extract signer information and verification status.
+Wraps `sigcheck.exe` to extract signer information.
 
-### Classifier (`services/classifier`)
-Determines if the file is a PE driver and tags it with architecture (x86/x64).
+### Patch Differ (`services/patch_differ`)
+Orchestrates Ghidra to decompile and diff two versions of a binary, using fuzzy hashing to align functions and detect changes.
 
 ### IOCTLance (`services/ioctlance`)
-A port of the IOCTLance vulnerability scanner to the Karton framework. It attempts to discover vulnerabilities like buffer overflows in IOCTL handlers.
+Scalable vulnerability scanner for IOCTL handlers.
 
 ## License
 

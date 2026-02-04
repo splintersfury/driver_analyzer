@@ -26,6 +26,8 @@ services:
       - MWDB_REDIS_URI=redis://mwdb-redis:6379/0
       - MWDB_SECRET_KEY=${MWDB_SECRET_KEY:-dev-secret-key-change-me}
       - MWDB_ENABLE_KARTON=1
+      - MWDB_ADMIN_LOGIN=admin
+      - MWDB_ADMIN_PASSWORD=admin
     depends_on:
       - mwdb-postgres
       - mwdb-redis
@@ -45,6 +47,20 @@ services:
       - PROXY_BACKEND_URL=http://mwdb-core:8080
     # volumes:
     #   - ./mwdb-ui:/usr/share/nginx/html
+    depends_on:
+      - mwdb-core
+
+  karton-driver-dashboard:
+    build: services/dashboard
+    container_name: driver_analyzer_dashboard
+    restart: on-failure
+    ports:
+      - "8088:5000"
+    environment:
+      - MWDB_API_URL=http://mwdb-core:8080/api/
+      - MWDB_API_KEY=${MWDB_API_KEY}
+    # networks:
+    #   - karton-network
     depends_on:
       - mwdb-core
 
@@ -215,10 +231,13 @@ services:
 
   karton-driver-patch-differ:
     restart: unless-stopped
-    build: ./services/patch_differ
+    # Now builds from AutoPiff instead of local duplicate
+    build:
+      context: ../AutoPiff
+      dockerfile: services/karton-patch-differ/Dockerfile
     environment: *custom_karton_env
     volumes:
-      - ./rules:/app/rules:ro
+      - ../AutoPiff/rules:/app/rules:ro
     depends_on:
       - karton-system
       - minio

@@ -1,6 +1,7 @@
 .env
 ghidra.zip
 ghidra_11.0.1_PUBLIC/
+ghidra_*/
 decompiled_code/
 *.sys
 *.log
@@ -12,3 +13,16 @@ vt_downloads/
 mwdb-uploads-data/
 mwdb-postgres-data/
 minio-data/
+
+# Backup directories
+*.BACKUP_*
+*.backup
+*.bak
+
+# Temporary/working files
+*.tmp
+*.swp
+decompiled_code_manual/
+
+# Large files
+*.zip

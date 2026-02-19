@@ -1,3 +1,7 @@
+# driver_analyzer production stack
+# NOTE: AutoPiff services build from ../AutoPiff.
+#       When adding new AutoPiff stages, also add them to ../AutoPiff/docker-compose.yml.
+
 version: '3'
 
 services:
@@ -219,16 +223,6 @@ services:
       - karton-redis
       - mwdb-core
 
-  karton-driver-ghidra:
-    restart: unless-stopped
-    build: ./services/ghidra
-    environment: *custom_karton_env
-    depends_on:
-      - karton-system
-      - minio
-      - karton-redis
-      - mwdb-core
-
   karton-driver-patch-differ:
     restart: unless-stopped
     # Now builds from AutoPiff instead of local duplicate
@@ -238,6 +232,52 @@ services:
     environment: *custom_karton_env
     volumes:
       - ../AutoPiff/rules:/app/rules:ro
+    depends_on:
+      - karton-system
+      - minio
+      - karton-redis
+      - mwdb-core
+
+  # --- AutoPiff Stage 5: Reachability Tagging ---
+  karton-driver-reachability:
+    restart: unless-stopped
+    build:
+      context: ../AutoPiff
+      dockerfile: services/karton-reachability/Dockerfile
+    environment: *custom_karton_env
+    depends_on:
+      - karton-system
+      - minio
+      - karton-redis
+      - mwdb-core
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+        reservations:
+          memory: 4G
+
+  # --- AutoPiff Stage 6: Scoring & Ranking ---
+  karton-driver-ranking:
+    restart: unless-stopped
+    build:
+      context: ../AutoPiff
+      dockerfile: services/karton-ranking/Dockerfile
+    environment: *custom_karton_env
+    volumes:
+      - ../AutoPiff/rules:/app/rules:ro
+    depends_on:
+      - karton-system
+      - minio
+      - karton-redis
+
+  # --- AutoPiff Stage 7: Report Generation ---
+  karton-driver-report:
+    restart: unless-stopped
+    build:
+      context: ../AutoPiff
+      dockerfile: services/karton-report/Dockerfile
+    environment: *custom_karton_env
     depends_on:
       - karton-system
       - minio

@@ -1,0 +1,13 @@
+all:
+  hosts:
+    win11_amd:
+      ansible_host: 127.0.0.1
+      ansible_port: 15985
+      ansible_user: admin
+      ansible_password: "CHANGE_ME"
+      ansible_connection: winrm
+      ansible_winrm_transport: basic
+      ansible_winrm_server_cert_validation: ignore
+
+  vars:
+    ansible_winrm_scheme: http

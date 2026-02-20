@@ -1,0 +1,22 @@
+all:
+  hosts:
+    driver_target:
+      ansible_host: 192.168.x.x
+      ansible_user: Administrator
+      ansible_password: "CHANGE_ME"
+      ansible_connection: winrm
+      ansible_winrm_transport: ntlm
+      ansible_winrm_server_cert_validation: ignore
+      ansible_port: 5985
+
+    windbg_debugger:
+      ansible_host: 192.168.x.x
+      ansible_user: Administrator
+      ansible_password: "CHANGE_ME"
+      ansible_connection: winrm
+      ansible_winrm_transport: ntlm
+      ansible_winrm_server_cert_validation: ignore
+      ansible_port: 5985
+
+  vars:
+    ansible_winrm_scheme: http

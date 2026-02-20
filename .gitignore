@@ -1,4 +1,10 @@
 .env
+.env.*
+
+# Ansible inventory contains credentials and IPs
+ansible/inventory/*.yml
+!ansible/inventory/*.yml.example
+
 ghidra.zip
 ghidra_11.0.1_PUBLIC/
 ghidra_*/

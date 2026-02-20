@@ -284,6 +284,39 @@ services:
       - karton-redis
       - mwdb-core
 
+  # --- AutoPiff Alerter: Telegram alerts for high-scoring findings ---
+  autopiff-alerter:
+    restart: unless-stopped
+    build:
+      context: ../AutoPiff
+      dockerfile: services/autopiff-alerter/Dockerfile
+    environment:
+      <<: *custom_karton_env
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      AUTOPIFF_SCORE_THRESHOLD: "8.0"
+    depends_on:
+      - karton-system
+      - minio
+      - karton-redis
+
+  # --- AutoPiff Driver Monitor: polls for new driver versions ---
+  autopiff-driver-monitor:
+    restart: unless-stopped
+    build:
+      context: ../AutoPiff
+      dockerfile: services/driver-monitor/Dockerfile
+    environment:
+      <<: *custom_karton_env
+      VT_API_KEY: ${VT_API_KEY:-}
+      WINBINDEX_INTERVAL_HOURS: "6"
+      VT_INTERVAL_HOURS: "4"
+    volumes:
+      - ../AutoPiff/services/driver-monitor/watchlist.yaml:/app/watchlist.yaml:ro
+    depends_on:
+      - karton-redis
+      - mwdb-core
+
 volumes:
   mwdb-postgres-data:
   minio-data:

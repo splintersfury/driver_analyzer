@@ -300,6 +300,25 @@ services:
       - minio
       - karton-redis
 
+  # --- DriverAtlas Triage: scores every driver's attack surface ---
+  autopiff-driver-triage:
+    restart: unless-stopped
+    build:
+      context: ../AutoPiff
+      dockerfile: services/karton-driver-triage/Dockerfile
+      additional_contexts:
+        driveratlas-src: ../DriverAtlas
+    environment:
+      <<: *custom_karton_env
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      DRIVERATLAS_SCORE_THRESHOLD: "8.0"
+    depends_on:
+      - karton-system
+      - minio
+      - karton-redis
+      - mwdb-core
+
   # --- AutoPiff Driver Monitor: polls for new driver versions ---
   autopiff-driver-monitor:
     restart: unless-stopped

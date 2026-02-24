@@ -18,8 +18,9 @@ REDIS_HOST = os.environ.get("KARTON_REDIS_HOST", "karton-redis")
 WATCH_KEY = "telegram:watch"
 
 
-def send_telegram_notification(sha256: str, verdict: str, vuln_count: int = 0, filename: str = ""):
-    """Send Telegram notification to all users watching this driver."""
+def send_telegram_notification(sha256: str, verdict: str, vuln_count: int = 0,
+                               context: dict = None):
+    """Send enriched Telegram notification to all users watching this driver."""
     if not TELEGRAM_BOT_TOKEN:
         return
 
@@ -31,16 +32,44 @@ def send_telegram_notification(sha256: str, verdict: str, vuln_count: int = 0, f
             logging.debug(f"No watchers for {sha256}")
             return
 
-        # Build message
-        emoji = "⚠️" if verdict == "VULNERABLE" else "✅"
-        msg = f"{emoji} *Analysis Complete*\n\n"
-        msg += f"📁 `{filename or sha256[:16]}...`\n"
-        msg += f"🔍 Verdict: *{verdict}*\n"
+        ctx = context or {}
 
-        if vuln_count > 0:
-            msg += f"🐛 Vulnerabilities: {vuln_count}\n"
+        # --- Build enriched message ---
+        if verdict == "VULNERABLE":
+            msg = f"⚠️ *VULNERABLE* — {vuln_count} issue{'s' if vuln_count != 1 else ''}\n\n"
+        else:
+            msg = "✅ *CLEAN*\n\n"
 
-        msg += f"\n[View in MWDB](http://localhost:8082/file/{sha256})"
+        # Driver identity: description or product, plus version
+        description = ctx.get("description", "")
+        version = ctx.get("version", "")
+        label = description or f"`{sha256[:16]}…`"
+        if version:
+            label += f" v{version}"
+        msg += f"📄 {label}\n"
+
+        # Publisher
+        publisher = ctx.get("publisher", "")
+        if publisher:
+            msg += f"🏢 {publisher}\n"
+
+        # Signing status
+        signing = ctx.get("signing", "")
+        if signing:
+            icon = "🔐" if signing == "Signed" else "🔓"
+            msg += f"{icon} {signing}\n"
+
+        # Vulnerability type breakdown
+        vuln_types = ctx.get("vuln_types", {})
+        if vuln_types:
+            msg += "\n🐛 *Vulnerabilities:*\n"
+            for vtype, vcount in vuln_types.items():
+                msg += f"  • {vtype} ({vcount})\n"
+        elif verdict == "CLEAN":
+            msg += "\nNo vulnerabilities detected.\n"
+
+        msg += f"\n`{sha256[:24]}…`\n"
+        msg += f"[View in MWDB](http://localhost:8082/file/{sha256})"
 
         # Send to all watchers
         for chat_id in chat_ids:
@@ -238,11 +267,45 @@ class ReporterKarton(Karton):
             obj.add_comment(markdown)
             logging.info(f"Reported IOCTLance attributes for {sha256}")
             
+            # Build enrichment context from MWDB attributes for notification
+            notify_ctx = {}
+            try:
+                a = obj.attributes  # dict: {key: [val, ...], ...}
+
+                def _first(key: str, default: str = "") -> str:
+                    vals = a.get(key, [])
+                    return vals[0] if vals else default
+
+                notify_ctx["description"] = (
+                    _first("sig_file_description")
+                    or _first("sig_description")
+                    or _first("sig_product")
+                    or ""
+                )
+                notify_ctx["publisher"] = _first("sig_publisher")
+                notify_ctx["version"] = _first("sig_file_version")
+
+                # Signing status from tags
+                tags = set(obj.tags) if hasattr(obj, "tags") else set()
+                if "signed" in tags:
+                    notify_ctx["signing"] = "Signed"
+                elif "unsigned" in tags:
+                    notify_ctx["signing"] = "Unsigned"
+
+                # Vulnerability type breakdown
+                vuln_types = {}
+                for vuln in vulnerabilities:
+                    title = vuln.get("title", "Unknown")
+                    vuln_types[title] = vuln_types.get(title, 0) + 1
+                if vuln_types:
+                    notify_ctx["vuln_types"] = vuln_types
+
+            except Exception as e:
+                logging.debug(f"Could not enrich notification context: {e}")
+
             # Send Telegram notification to watchers
             try:
-                sample = task.get_resource("sample")
-                filename = sample.name if sample else ""
-                send_telegram_notification(sha256, verdict, count, filename)
+                send_telegram_notification(sha256, verdict, count, context=notify_ctx)
             except Exception as e:
                 logging.debug(f"Telegram notification skipped: {e}")
          except Exception as e:

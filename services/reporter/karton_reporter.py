@@ -17,6 +17,72 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 REDIS_HOST = os.environ.get("KARTON_REDIS_HOST", "karton-redis")
 WATCH_KEY = "telegram:watch"
 
+# Compact exploit primitive mapping for IOCTLance titles.
+# Full mapping lives in AutoPiff/rules/exploit_map.yaml; this is the
+# notification-friendly subset.
+EXPLOIT_MAP = {
+    "read/write controllable address": {
+        "class": "Arbitrary R/W",
+        "primitives": "Direct IOCTL R/W",
+        "chain": "Token Swap / PTE Manipulation",
+    },
+    "map physical memory": {
+        "class": "Arbitrary R/W",
+        "primitives": "Physical Memory Mapping",
+        "chain": "Token Swap / PTE Manipulation",
+    },
+    "buffer overflow": {
+        "class": "Buffer Overflow",
+        "primitives": "Pool Corruption",
+        "chain": "Named Pipe Spray → I/O Ring R/W (22H2+)",
+    },
+    "dest or src controllable": {
+        "class": "Buffer Overflow",
+        "primitives": "Pool Corruption",
+        "chain": "Named Pipe Spray → I/O Ring R/W (22H2+)",
+    },
+    "arbitrary shellcode execution": {
+        "class": "Code Execution",
+        "primitives": "Direct Call Hijack",
+        "chain": "Direct (no chain needed)",
+    },
+    "arbitrary wrmsr": {
+        "class": "HW Access",
+        "primitives": "MSR Write",
+        "chain": "Token Swap via LSTAR / PTE Manipulation",
+    },
+    "arbitrary out": {
+        "class": "HW Access",
+        "primitives": "I/O Port Access",
+        "chain": "DMA → Physical Memory R/W",
+    },
+    "controllable process handle": {
+        "class": "Privilege Escalation",
+        "primitives": "Process Handle Leak",
+        "chain": "Token Manipulation",
+    },
+    "arbitrary process termination": {
+        "class": "Privilege Escalation",
+        "primitives": "Process Kill",
+        "chain": "DoS / Defense Evasion",
+    },
+    "null pointer dereference - input buffer": {
+        "class": "Null Deref",
+        "primitives": "Limited",
+        "chain": "DoS (BSoD)",
+    },
+    "null pointer dereference - allocated memory": {
+        "class": "Null Deref",
+        "primitives": "Limited",
+        "chain": "DoS (BSoD)",
+    },
+    "ObjectName in ObjectAttributes controllable": {
+        "class": "File/Registry Access",
+        "primitives": "Arbitrary Path Access",
+        "chain": "Privilege Escalation via file/registry overwrite",
+    },
+}
+
 
 def send_telegram_notification(sha256: str, verdict: str, vuln_count: int = 0,
                                context: dict = None):
@@ -59,12 +125,17 @@ def send_telegram_notification(sha256: str, verdict: str, vuln_count: int = 0,
             icon = "🔐" if signing == "Signed" else "🔓"
             msg += f"{icon} {signing}\n"
 
-        # Vulnerability type breakdown
+        # Vulnerability type breakdown with exploit primitives
         vuln_types = ctx.get("vuln_types", {})
         if vuln_types:
             msg += "\n🐛 *Vulnerabilities:*\n"
             for vtype, vcount in vuln_types.items():
-                msg += f"  • {vtype} ({vcount})\n"
+                exploit = EXPLOIT_MAP.get(vtype)
+                if exploit:
+                    msg += f"  • {vtype} ({vcount})\n"
+                    msg += f"    ↳ {exploit['primitives']} → {exploit['chain']}\n"
+                else:
+                    msg += f"  • {vtype} ({vcount})\n"
         elif verdict == "CLEAN":
             msg += "\nNo vulnerabilities detected.\n"
 

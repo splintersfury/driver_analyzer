@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Loading — Driver Analyzer{% endblock %}
+{% block head %}
+<meta http-equiv="refresh" content="5">
+{% endblock %}
+
+{% block content %}
+<div style="text-align:center; padding:100px 20px;">
+  <div style="font-size:32px; margin-bottom:16px;">&#9881;</div>
+  <h2 style="margin-bottom:12px;">Loading Dashboard</h2>
+  <p style="color:var(--muted);">Collecting stats from MWDB pipeline... This page will auto-refresh.</p>
+  <div style="margin-top:24px; width:200px; height:4px; background:var(--border); border-radius:2px; margin-left:auto; margin-right:auto; overflow:hidden;">
+    <div style="width:60%; height:100%; background:var(--blue); border-radius:2px; animation: load 2s ease-in-out infinite;"></div>
+  </div>
+</div>
+<style>
+@keyframes load {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+</style>
+{% endblock %}

@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+{% block title %}Driver Analyzer{% endblock %}
+
+{% block content %}
+<!-- Compact stats strip -->
+<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:20px; font-size:13px;">
+  <span class="badge badge-blue">{{ "{:,}".format(data.counts.driver) }} drivers</span>
+  <span class="badge badge-red">{{ data.counts.vulnerable }} vulnerable</span>
+  <span class="badge badge-purple">{{ data.counts.ghidra_decompiled|default(0) }} decompiled</span>
+  <span class="badge badge-orange">{{ data.counts.autopiff_reported }} autopiff</span>
+  <span class="badge badge-muted">{{ data.counts.driveratlas_triaged }} triaged</span>
+  <span style="color:var(--muted); margin-left:auto; font-size:11px;">
+    {{ data.findings|length }} findings &middot;
+    {{ data.vuln_drivers|length }} vuln drivers
+  </span>
+</div>
+
+<!-- Findings by Category + Rule summary -->
+<div style="display:flex; gap:16px; margin-bottom:24px; flex-wrap:wrap;">
+  <div style="flex:1; min-width:250px;">
+    <div class="section-title">Findings by Category<div class="line"></div></div>
+    <div style="display:flex; flex-wrap:wrap; gap:6px;">
+      {% for cat, count in data.category_counts.items() %}
+        <a href="#findings" class="badge {% if cat == 'type_confusion' %}badge-red{% elif 'lifetime' in cat or 'uaf' in cat %}badge-orange{% elif 'info' in cat %}badge-blue{% else %}badge-muted{% endif %}" onclick="filterCategory('{{ cat }}')" style="cursor:pointer;">
+          {{ cat.replace('_', ' ') }} ({{ count }})
+        </a>
+      {% endfor %}
+    </div>
+  </div>
+  <div style="flex:1; min-width:250px;">
+    <div class="section-title">Exploit Primitives (IOCTLance)<div class="line"></div></div>
+    <div style="display:flex; flex-wrap:wrap; gap:6px;">
+      {% for prim, count in data.primitive_counts.items() %}
+        <span class="badge badge-red">{{ prim }} ({{ count }})</span>
+      {% endfor %}
+      {% if not data.primitive_counts %}
+        <span style="color:var(--muted); font-size:12px;">No IOCTLance primitives parsed yet</span>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- FINDINGS TABLE (the actual useful part) -->
+<div class="section" id="findings">
+  <div class="section-title">
+    AutoPiff Findings ({{ data.findings|length }})
+    <div class="line"></div>
+    <div style="display:flex; gap:8px; margin-left:auto;">
+      <select id="catFilter" onchange="applyFilters()" style="background:var(--surface); border:1px solid var(--border); color:var(--text); padding:4px 8px; border-radius:4px; font-size:12px;">
+        <option value="">All categories</option>
+        {% for cat in data.category_counts.keys() %}
+          <option value="{{ cat }}">{{ cat.replace('_', ' ') }}</option>
+        {% endfor %}
+      </select>
+      <select id="reachFilter" onchange="applyFilters()" style="background:var(--surface); border:1px solid var(--border); color:var(--text); padding:4px 8px; border-radius:4px; font-size:12px;">
+        <option value="">All reachability</option>
+        <option value="reachable">Reachable</option>
+        <option value="unknown">Unknown</option>
+        <option value="unreachable">Unreachable</option>
+      </select>
+    </div>
+  </div>
+  {% if data.findings %}
+  <div style="background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow-x:auto;">
+    <table class="data-table" id="findingsTable">
+      <thead>
+        <tr>
+          <th style="width:40px;">#</th>
+          <th style="cursor:pointer;" onclick="sortTable(1)">Score</th>
+          <th>Category</th>
+          <th>Rule</th>
+          <th>Driver</th>
+          <th>Function</th>
+          <th>Reach</th>
+          <th>Why</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in data.findings %}
+        <tr data-category="{{ f.category }}" data-reach="{{ f.reachability }}" data-score="{{ f.score }}">
+          <td style="color:var(--muted);">{{ loop.index }}</td>
+          <td>
+            {% if f.score >= 6 %}
+              <span class="badge badge-red" style="font-weight:700;">{{ "%.1f"|format(f.score) }}</span>
+            {% elif f.score >= 5 %}
+              <span class="badge badge-orange">{{ "%.1f"|format(f.score) }}</span>
+            {% elif f.score >= 4 %}
+              <span class="badge badge-blue">{{ "%.1f"|format(f.score) }}</span>
+            {% else %}
+              <span class="badge badge-muted">{{ "%.1f"|format(f.score) }}</span>
+            {% endif %}
+          </td>
+          <td>
+            <span class="badge {% if f.category == 'type_confusion' %}badge-red{% elif 'lifetime' in f.category %}badge-orange{% elif 'info' in f.category %}badge-blue{% else %}badge-muted{% endif %}">
+              {{ f.category.replace('_', ' ') }}
+            </span>
+          </td>
+          <td style="font-size:11px; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ f.rule_ids|join(', ') }}">
+            {{ f.rule_ids|join(', ') }}
+          </td>
+          <td><a href="/driver/{{ f.driver_sha }}">{{ f.driver_name }}</a></td>
+          <td class="mono" style="font-size:11px;">{{ f.function }}</td>
+          <td>
+            {% if f.reachability == 'reachable' %}
+              <span class="badge badge-green">reachable</span>
+            {% elif f.reachability == 'unknown' %}
+              <span class="badge badge-muted">unknown</span>
+            {% else %}
+              <span class="badge badge-muted">{{ f.reachability }}</span>
+            {% endif %}
+          </td>
+          <td style="font-size:12px; max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ f.why }}">
+            {{ f.why }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="text-align:center; padding:40px; color:var(--muted);">
+    No AutoPiff findings yet. Reports will appear as the pipeline processes drivers.
+  </div>
+  {% endif %}
+</div>
+
+<!-- VULNERABLE DRIVERS TABLE -->
+<div class="section" style="margin-top:32px;">
+  <div class="section-title">
+    IOCTLance Vulnerable Drivers ({{ data.vuln_drivers|length }})
+    <div class="line"></div>
+  </div>
+  {% if data.vuln_drivers %}
+  <div style="background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow-x:auto;">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Driver</th>
+          <th>Product</th>
+          <th>Vulns</th>
+          <th>Primitives</th>
+          <th>IOCTL Codes</th>
+          <th>Score</th>
+          <th>Signed</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in data.vuln_drivers %}
+        <tr>
+          <td><a href="/driver/{{ d.sha256 }}">{{ d.name }}</a></td>
+          <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ d.product }}">{{ d.product[:45] }}</td>
+          <td>
+            {% if d.vuln_count >= 30 %}
+              <span class="badge badge-red" style="font-weight:700;">{{ d.vuln_count }}</span>
+            {% elif d.vuln_count >= 5 %}
+              <span class="badge badge-orange">{{ d.vuln_count }}</span>
+            {% else %}
+              <span class="badge badge-blue">{{ d.vuln_count }}</span>
+            {% endif %}
+          </td>
+          <td style="font-size:11px;">
+            <div class="tag-list">
+            {% set seen_prims = [] %}
+            {% for ic in d.ioctl_codes %}
+              {% if ic.title not in seen_prims %}
+                {% if seen_prims.append(ic.title) %}{% endif %}
+                <span class="badge badge-red" style="font-size:10px;">{{ ic.title }}</span>
+              {% endif %}
+            {% endfor %}
+            {% if not d.ioctl_codes %}
+              {% for p in d.primitives[:3] %}
+                <span class="badge badge-red" style="font-size:10px;">{{ p }}</span>
+              {% endfor %}
+            {% endif %}
+            {% if not d.ioctl_codes and not d.primitives %}
+              <span style="color:var(--muted);">-</span>
+            {% endif %}
+            </div>
+          </td>
+          <td class="mono" style="font-size:11px; max-width:180px; overflow:hidden;">
+            {% set seen_codes = [] %}
+            {% for ic in d.ioctl_codes %}
+              {% if ic.code not in seen_codes and seen_codes|length < 6 %}
+                {% if seen_codes.append(ic.code) %}{% endif %}
+                <span title="{{ ic.title }}: {{ ic.description }}">{{ ic.code }}</span>
+              {% endif %}
+            {% endfor %}
+            {% set unique_count = d.ioctl_codes|map(attribute='code')|list|unique|list|length %}
+            {% if unique_count > 6 %}
+              <div style="color:var(--muted);">+{{ unique_count - 6 }} more</div>
+            {% endif %}
+            {% if not d.ioctl_codes %}<span style="color:var(--muted);">-</span>{% endif %}
+          </td>
+          <td>
+            {% if d.attack_score %}
+              {% set score_f = d.attack_score|float %}
+              <span class="badge {% if score_f >= 10 %}badge-red{% elif score_f >= 7 %}badge-orange{% elif score_f >= 5 %}badge-blue{% else %}badge-muted{% endif %}">{{ d.attack_score }}</span>
+            {% else %}
+              <span style="color:var(--muted);">-</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if d.signed %}<span class="badge badge-green">signed</span>{% else %}<span class="badge badge-orange">unsigned</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+function applyFilters() {
+  const cat = document.getElementById('catFilter').value;
+  const reach = document.getElementById('reachFilter').value;
+  document.querySelectorAll('#findingsTable tbody tr').forEach(tr => {
+    const matchCat = !cat || tr.dataset.category === cat;
+    const matchReach = !reach || tr.dataset.reach === reach;
+    tr.style.display = (matchCat && matchReach) ? '' : 'none';
+  });
+}
+
+function filterCategory(cat) {
+  document.getElementById('catFilter').value = cat;
+  applyFilters();
+  document.getElementById('findings').scrollIntoView({behavior: 'smooth'});
+}
+
+function sortTable(col) {
+  const table = document.getElementById('findingsTable');
+  const tbody = table.querySelector('tbody');
+  const rows = Array.from(tbody.querySelectorAll('tr'));
+  const dir = table.dataset.sortDir === 'asc' ? 'desc' : 'asc';
+  table.dataset.sortDir = dir;
+  rows.sort((a, b) => {
+    const va = parseFloat(a.dataset.score);
+    const vb = parseFloat(b.dataset.score);
+    return dir === 'asc' ? va - vb : vb - va;
+  });
+  rows.forEach(r => tbody.appendChild(r));
+}
+</script>
+{% endblock %}

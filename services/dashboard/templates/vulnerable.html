@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}Vulnerable Drivers — Driver Analyzer{% endblock %}
+
+{% block content %}
+<div style="display:flex; align-items:center; gap:16px; margin-bottom:20px; flex-wrap:wrap;">
+  <h1 style="font-size:22px;">Vulnerable Drivers</h1>
+  <span class="badge badge-red" style="font-size:14px; padding:4px 14px;">{{ drivers|length }} found</span>
+  <div style="margin-left:auto; display:flex; gap:8px;">
+    <select id="primFilter" onchange="applyFilters()" style="background:var(--surface); border:1px solid var(--border); color:var(--text); padding:4px 8px; border-radius:4px; font-size:12px;">
+      <option value="">All primitives</option>
+      {% set all_prims = [] %}
+      {% for d in drivers %}
+        {% for ic in d.ioctl_codes %}
+          {% if ic.title not in all_prims %}
+            {% if all_prims.append(ic.title) %}{% endif %}
+          {% endif %}
+        {% endfor %}
+      {% endfor %}
+      {% for p in all_prims %}
+        <option value="{{ p }}">{{ p }}</option>
+      {% endfor %}
+    </select>
+    <select id="signFilter" onchange="applyFilters()" style="background:var(--surface); border:1px solid var(--border); color:var(--text); padding:4px 8px; border-radius:4px; font-size:12px;">
+      <option value="">All signing</option>
+      <option value="signed">Signed</option>
+      <option value="unsigned">Unsigned</option>
+    </select>
+  </div>
+</div>
+
+{% if drivers %}
+<div style="background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow-x:auto;">
+  <table class="data-table" id="vulnTable">
+    <thead>
+      <tr>
+        <th style="width:40px;">#</th>
+        <th>Driver</th>
+        <th>Product</th>
+        <th style="cursor:pointer;" onclick="sortTable(3)">Vulns</th>
+        <th>Primitives</th>
+        <th>IOCTL Codes</th>
+        <th style="cursor:pointer;" onclick="sortTable(6)">Score</th>
+        <th>Risk</th>
+        <th>Signed</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d in drivers %}
+      <tr data-vuln="{{ d.vuln_count }}" data-score="{{ d.attack_score or 0 }}"
+          data-prims="{% for ic in d.ioctl_codes %}{{ ic.title }},{% endfor %}"
+          data-signed="{{ 'signed' if d.signed else 'unsigned' }}">
+        <td style="color:var(--muted);">{{ loop.index }}</td>
+        <td><a href="/driver/{{ d.sha256 }}">{{ d.name }}</a></td>
+        <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ d.product }}">{{ d.product[:45] }}</td>
+        <td>
+          {% if d.vuln_count >= 30 %}
+            <span class="badge badge-red" style="font-weight:700;">{{ d.vuln_count }}</span>
+          {% elif d.vuln_count >= 10 %}
+            <span class="badge badge-red">{{ d.vuln_count }}</span>
+          {% elif d.vuln_count >= 5 %}
+            <span class="badge badge-orange">{{ d.vuln_count }}</span>
+          {% else %}
+            <span class="badge badge-blue">{{ d.vuln_count }}</span>
+          {% endif %}
+        </td>
+        <td style="font-size:11px;">
+          <div class="tag-list">
+          {% set seen_prims = [] %}
+          {% for ic in d.ioctl_codes %}
+            {% if ic.title not in seen_prims %}
+              {% if seen_prims.append(ic.title) %}{% endif %}
+              <span class="badge badge-red" style="font-size:10px;">{{ ic.title }}</span>
+            {% endif %}
+          {% endfor %}
+          {% if not d.ioctl_codes and d.primitives %}
+            {% for p in d.primitives[:3] %}
+              <span class="badge badge-red" style="font-size:10px;">{{ p }}</span>
+            {% endfor %}
+          {% endif %}
+          {% if not d.ioctl_codes and not d.primitives %}
+            <span style="color:var(--muted);">-</span>
+          {% endif %}
+          </div>
+        </td>
+        <td class="mono" style="font-size:11px; max-width:180px; overflow:hidden;">
+          {% set seen_codes = [] %}
+          {% for ic in d.ioctl_codes %}
+            {% if ic.code not in seen_codes and seen_codes|length < 6 %}
+              {% if seen_codes.append(ic.code) %}{% endif %}
+              <span title="{{ ic.title }}: {{ ic.description }}">{{ ic.code }}</span>
+            {% endif %}
+          {% endfor %}
+          {% set unique_count = d.ioctl_codes|map(attribute='code')|list|unique|list|length %}
+          {% if unique_count > 6 %}
+            <div style="color:var(--muted);">+{{ unique_count - 6 }} more</div>
+          {% endif %}
+          {% if not d.ioctl_codes %}<span style="color:var(--muted);">-</span>{% endif %}
+        </td>
+        <td>
+          {% if d.attack_score %}
+            {% set score_f = d.attack_score|float %}
+            <span class="badge {% if score_f >= 10 %}badge-red{% elif score_f >= 7 %}badge-orange{% elif score_f >= 5 %}badge-blue{% else %}badge-muted{% endif %}">{{ d.attack_score }}</span>
+          {% else %}
+            <span style="color:var(--muted);">-</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if d.risk %}
+            <span class="badge {% if d.risk == 'critical' %}badge-red{% elif d.risk == 'high' %}badge-red{% elif d.risk == 'medium' %}badge-orange{% else %}badge-muted{% endif %}">{{ d.risk }}</span>
+          {% else %}
+            <span style="color:var(--muted);">-</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if d.signed %}<span class="badge badge-green">signed</span>{% else %}<span class="badge badge-orange">unsigned</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div style="text-align:center; padding:60px; color:var(--muted);">
+  <p style="font-size:16px;">No vulnerable drivers detected yet.</p>
+  <p style="font-size:13px; margin-top:8px;">Upload drivers to MWDB and the IOCTLance scanner will analyze them.</p>
+</div>
+{% endif %}
+
+<script>
+function applyFilters() {
+  const prim = document.getElementById('primFilter').value;
+  const sign = document.getElementById('signFilter').value;
+  document.querySelectorAll('#vulnTable tbody tr').forEach(tr => {
+    const matchPrim = !prim || tr.dataset.prims.includes(prim);
+    const matchSign = !sign || tr.dataset.signed === sign;
+    tr.style.display = (matchPrim && matchSign) ? '' : 'none';
+  });
+}
+
+function sortTable(col) {
+  const table = document.getElementById('vulnTable');
+  const tbody = table.querySelector('tbody');
+  const rows = Array.from(tbody.querySelectorAll('tr'));
+  const dir = table.dataset.sortDir === 'asc' ? 'desc' : 'asc';
+  table.dataset.sortDir = dir;
+  rows.sort((a, b) => {
+    const key = col === 3 ? 'vuln' : 'score';
+    const va = parseFloat(a.dataset[key]) || 0;
+    const vb = parseFloat(b.dataset[key]) || 0;
+    return dir === 'asc' ? va - vb : vb - va;
+  });
+  rows.forEach(r => tbody.appendChild(r));
+}
+</script>
+{% endblock %}

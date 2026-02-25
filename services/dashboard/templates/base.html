@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}Driver Analyzer{% endblock %}</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2333;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --blue: #58a6ff;
+    --green: #3fb950;
+    --orange: #d29922;
+    --red: #f85149;
+    --purple: #bc8cff;
+    --cyan: #39d2c0;
+    --pink: #f778ba;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    min-height: 100vh;
+  }
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* Nav */
+  nav {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 32px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  nav .brand {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  nav .brand span { color: var(--blue); }
+  nav a.nav-link {
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 500;
+    padding: 6px 12px;
+    border-radius: 6px;
+    transition: all 0.15s;
+  }
+  nav a.nav-link:hover, nav a.nav-link.active {
+    color: var(--text);
+    background: var(--surface2);
+    text-decoration: none;
+  }
+
+  .container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 24px 32px;
+  }
+
+  /* Stat cards */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+  }
+  .stat-card .stat-label {
+    font-size: 12px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 6px;
+  }
+  .stat-card .stat-value {
+    font-size: 28px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-card .stat-sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  .stat-value.blue { color: var(--blue); }
+  .stat-value.green { color: var(--green); }
+  .stat-value.orange { color: var(--orange); }
+  .stat-value.red { color: var(--red); }
+  .stat-value.purple { color: var(--purple); }
+  .stat-value.cyan { color: var(--cyan); }
+
+  /* Section */
+  .section {
+    margin-bottom: 28px;
+  }
+  .section-title {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--muted);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .section-title .line {
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* Chart panels */
+  .chart-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+  .chart-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+  }
+  .chart-panel h3 {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: var(--text);
+  }
+
+  /* Table */
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .data-table th {
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .data-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  .data-table tr:hover td {
+    background: var(--surface2);
+  }
+  .data-table .mono {
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  /* Badges */
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .badge-red { background: rgba(248,81,73,0.15); color: var(--red); }
+  .badge-green { background: rgba(63,185,80,0.15); color: var(--green); }
+  .badge-orange { background: rgba(210,153,34,0.15); color: var(--orange); }
+  .badge-blue { background: rgba(88,166,255,0.15); color: var(--blue); }
+  .badge-purple { background: rgba(188,140,255,0.15); color: var(--purple); }
+  .badge-muted { background: rgba(139,148,158,0.15); color: var(--muted); }
+
+  /* Pipeline funnel */
+  .funnel {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+  }
+  .funnel-step {
+    flex: 1;
+    min-width: 140px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+    position: relative;
+  }
+  .funnel-step .funnel-count {
+    font-size: 24px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .funnel-step .funnel-label {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-top: 4px;
+  }
+  .funnel-arrow {
+    color: var(--muted);
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+  .funnel-step.active {
+    border-color: var(--blue);
+    background: rgba(88,166,255,0.05);
+  }
+  .funnel-step.vuln {
+    border-color: var(--red);
+    background: rgba(248,81,73,0.05);
+  }
+
+  /* Tag list */
+  .tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    background: var(--surface2);
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+
+  /* Driver detail */
+  .detail-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+  .detail-header h1 {
+    font-size: 22px;
+  }
+  .detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .detail-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+  }
+  .detail-card h3 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 12px;
+  }
+  .detail-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .detail-row:last-child { border-bottom: none; }
+  .detail-key { color: var(--muted); }
+  .detail-val { font-weight: 500; }
+
+  .comment-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 12px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .comment-meta {
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .comment-body h3 { font-size: 15px; font-weight: 600; margin: 8px 0 6px; }
+  .comment-body h4 { font-size: 13px; font-weight: 600; margin: 6px 0 4px; }
+  .comment-body p { margin: 4px 0; }
+  .comment-body strong { color: var(--text); }
+  .comment-body em { color: var(--muted); font-style: italic; }
+  .comment-body code { background: var(--surface2); padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+  .comment-body pre { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 12px; overflow-x: auto; font-size: 11px; margin: 8px 0; }
+  .comment-body ul, .comment-body ol { padding-left: 20px; margin: 4px 0; }
+  .comment-body li { margin: 2px 0; }
+</style>
+{% block head %}{% endblock %}
+</head>
+<body>
+<nav>
+  <div class="brand"><span>&#9632;</span> Driver Analyzer</div>
+  <a href="/" class="nav-link {% if request.path == '/' %}active{% endif %}">Dashboard</a>
+  <a href="/vulnerable" class="nav-link {% if request.path == '/vulnerable' %}active{% endif %}">Vulnerable</a>
+  <a href="http://localhost:8082" class="nav-link" target="_blank">MWDB</a>
+  <a href="http://localhost:8081" class="nav-link" target="_blank">Karton</a>
+</nav>
+<div class="container">
+  {% block content %}{% endblock %}
+</div>
+</body>
+</html>

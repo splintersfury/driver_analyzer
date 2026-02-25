@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% block title %}{{ driver.name }} — Driver Analyzer{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:8px;">
+  <a href="/" style="color:var(--muted); font-size:13px;">&#8592; Back to findings</a>
+</div>
+
+<!-- Header -->
+<div style="display:flex; align-items:center; gap:12px; margin-bottom:20px; flex-wrap:wrap;">
+  <h1 style="font-size:22px;">{{ driver.name }}</h1>
+  {% if driver.vuln_info %}
+    <span class="badge badge-red">{{ driver.vuln_info.vuln_count }} IOCTLance vulns</span>
+  {% endif %}
+  {% if 'signed' in driver.tags %}
+    <span class="badge badge-green">Signed</span>
+  {% elif 'unsigned' in driver.tags %}
+    <span class="badge badge-orange">Unsigned</span>
+  {% endif %}
+  {% if driver.vuln_info and driver.vuln_info.attack_score %}
+    <span class="badge badge-blue">Attack Surface: {{ driver.vuln_info.attack_score }}</span>
+  {% endif %}
+  {% if driver.vuln_info and driver.vuln_info.risk %}
+    <span class="badge {% if driver.vuln_info.risk == 'critical' %}badge-red{% elif driver.vuln_info.risk == 'medium' %}badge-orange{% else %}badge-muted{% endif %}">{{ driver.vuln_info.risk }}</span>
+  {% endif %}
+</div>
+
+<!-- Info bar -->
+<div style="display:flex; gap:16px; margin-bottom:24px; flex-wrap:wrap;">
+  <div class="detail-card" style="flex:1; min-width:250px;">
+    <h3>Identity</h3>
+    <div class="detail-row"><span class="detail-key">Product</span><span class="detail-val">{{ driver.product }}</span></div>
+    <div style="padding:6px 0; border-bottom:1px solid var(--border); font-size:13px;">
+      <div class="detail-key" style="margin-bottom:4px;">SHA256</div>
+      <div class="mono" style="font-size:11px; word-break:break-all; color:var(--text); user-select:all;">{{ driver.sha256 }}</div>
+    </div>
+    {% for key, val in driver.attributes.items() %}
+    <div class="detail-row"><span class="detail-key">{{ key }}</span><span class="detail-val" style="font-size:12px;">{{ val }}</span></div>
+    {% endfor %}
+  </div>
+  {% if driver.report %}
+  <div class="detail-card" style="flex:1; min-width:250px;">
+    <h3>AutoPiff Report</h3>
+    <div class="detail-row"><span class="detail-key">Old Version</span><span class="detail-val" style="font-size:11px;">{{ driver.report.old_version }}</span></div>
+    <div class="detail-row"><span class="detail-key">New Version</span><span class="detail-val" style="font-size:11px;">{{ driver.report.new_version }}</span></div>
+    <div class="detail-row"><span class="detail-key">Total Findings</span><span class="detail-val">{{ driver.report.total_findings }}</span></div>
+    <div class="detail-row"><span class="detail-key">Reachable</span><span class="detail-val">{{ driver.report.reachable_findings }}</span></div>
+    <div class="detail-row"><span class="detail-key">Top Categories</span><span class="detail-val">{{ driver.report.top_categories|join(', ') }}</span></div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- AutoPiff Findings -->
+{% if driver.report and driver.report.findings %}
+<div class="section">
+  <div class="section-title">AutoPiff Findings ({{ driver.report.findings|length }})<div class="line"></div></div>
+  <div style="background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow-x:auto;">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Score</th>
+          <th>Category</th>
+          <th>Rule</th>
+          <th>Function</th>
+          <th>Reach</th>
+          <th>Sinks</th>
+          <th>Why</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in driver.report.findings %}
+        <tr>
+          <td style="color:var(--muted);">{{ loop.index }}</td>
+          <td>
+            <span class="badge {% if f.score >= 6 %}badge-red{% elif f.score >= 5 %}badge-orange{% elif f.score >= 4 %}badge-blue{% else %}badge-muted{% endif %}" style="font-weight:700;">
+              {{ "%.2f"|format(f.score) }}
+            </span>
+          </td>
+          <td><span class="badge {% if f.category == 'type_confusion' %}badge-red{% elif 'lifetime' in f.category %}badge-orange{% elif 'info' in f.category %}badge-blue{% else %}badge-muted{% endif %}">{{ f.category.replace('_', ' ') }}</span></td>
+          <td style="font-size:11px;">{{ f.rule_ids|join(', ') }}</td>
+          <td class="mono" style="font-size:11px;">{{ f.function }}</td>
+          <td>
+            {% if f.reachability == 'reachable' %}
+              <span class="badge badge-green">reachable</span>
+            {% else %}
+              <span class="badge badge-muted">{{ f.reachability }}</span>
+            {% endif %}
+          </td>
+          <td style="font-size:11px;">{{ f.sinks|join(', ') }}</td>
+          <td style="font-size:12px;">{{ f.why }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Added checks detail -->
+  {% for f in driver.report.findings %}
+  {% if f.added_checks %}
+  <details style="margin-top:8px;">
+    <summary style="cursor:pointer; font-size:12px; color:var(--muted); padding:4px;">
+      {{ f.function }} &mdash; Added checks ({{ f.added_checks|length }})
+    </summary>
+    <pre style="background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:12px; font-size:11px; overflow-x:auto; color:var(--text); margin-top:4px;">{% for ac in f.added_checks %}{{ ac }}
+{% endfor %}</pre>
+  </details>
+  {% endif %}
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- IOCTLance Results -->
+{% if driver.vuln_info and driver.vuln_info.ioctl_codes %}
+<div class="section" style="margin-top:24px;">
+  <div class="section-title">IOCTLance IOCTL Codes<div class="line"></div></div>
+  <div style="background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow-x:auto;">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>IOCTL Code</th>
+          <th>Primitive</th>
+          <th>Type</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ic in driver.vuln_info.ioctl_codes %}
+        <tr>
+          <td class="mono" style="font-weight:600;">{{ ic.code }}</td>
+          <td><span class="badge badge-red">{{ ic.title }}</span></td>
+          <td>{{ ic.description }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- Raw Analysis Comments -->
+{% if driver.comments %}
+<div class="section" style="margin-top:24px;">
+  <div class="section-title">Analysis Comments ({{ driver.comments|length }})<div class="line"></div></div>
+  {% for c in driver.comments %}
+  <div class="comment-block">
+    <div class="comment-meta">{{ c.author }} &middot; {{ c.timestamp }}</div>
+    <div class="comment-body">{{ c.comment|markdown }}</div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Tags -->
+<div class="section" style="margin-top:24px;">
+  <div class="section-title">Tags<div class="line"></div></div>
+  <div class="tag-list" style="gap:6px;">
+    {% for t in driver.tags|sort %}
+      {% if t == 'vulnerable' or '_vuln_' in t %}
+        <span class="badge badge-red">{{ t }}</span>
+      {% elif t.startswith('risk:') or t.startswith('attack_surface') %}
+        <span class="badge badge-orange">{{ t }}</span>
+      {% elif t == 'signed' %}
+        <span class="badge badge-green">{{ t }}</span>
+      {% else %}
+        <span class="tag">{{ t }}</span>
+      {% endif %}
+    {% endfor %}
+  </div>
+</div>
+
+<!-- MWDB link -->
+<div style="margin-top:24px; text-align:center;">
+  <a href="http://localhost:8082/file/{{ driver.sha256 }}" target="_blank" class="badge badge-blue" style="padding:8px 20px; font-size:13px;">
+    View in MWDB &#8594;
+  </a>
+</div>
+{% endblock %}
